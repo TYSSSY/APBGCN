@@ -69,7 +69,6 @@ class SkeletonDataset(Dataset, ABC):
                 if fl in self.missing_skeleton_file_names:
                     # print('Skip file: ', fl)
                     continue
-
                 # action_class = int(fl[fl.find('A') + 1: fl.find('A') + 4])
                 subject_id = int(fl[fl.find('P') + 1: fl.find('P') + 4])
                 camera_id = int(fl[fl.find('C') + 1: fl.find('C') + 4])

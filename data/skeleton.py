@@ -66,10 +66,12 @@ def motion_vector(frames):
     mgd = torch.sqrt(torch.sum(torch.square(frames), dim=2)) + 1e-6
     mv = torch.zeros(frames.shape)
     mv[1:, :, :] = frames[1:, :, :] - frames[0: -1, :, :]
+    temp_mv = mv
     mv = torch.div(mv.view(-1, 3), mgd.view(-1, 1)).view(frames.shape)
     # switch the order to {z, x, y} before applying acos
-    mv = torch.cat([torch.acos(mv[:, :, [2, 0, 1]]),
+    mv = torch.cat([torch.acos(mv[:, :, [2, 0, 1]]/torch.unsqueeze(mgd, dim=2)),
                     torch.unsqueeze(mgd, dim=2)], dim=-1)
+    mv = torch.cat((mv,temp_mv), dim = -1)
     return mv
 
 

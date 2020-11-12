@@ -10,6 +10,7 @@ from optimizer import get_std_opt
 from tensorboardX import SummaryWriter
 from tqdm import tqdm, trange
 import torch.nn as nn
+import numpy as np
 class GCNTrainer(object):
     def __init__(self, model, train_loader, train_labels, val_loader, val_labels, adj, optimizer, loss_fn, log_dir):
 
@@ -61,7 +62,7 @@ class GCNTrainer(object):
                 acc = correct_points.float()/results.size()[0]
                 self.writer.add_scalar('train/train_overall_acc', acc, i_acc+i+1)
 
-                loss.backward()
+                #loss.backward()
                 self.optimizer.step()
 
                 log_str = 'epoch %d, step %d: train_loss %.3f; train_acc %.3f' % (epoch+1, i+1, loss, acc)
@@ -110,7 +111,7 @@ class GCNTrainer(object):
 
             batch = batch.to(self.device)
             output = self.model(batch.x, adj=self.adj)
-            target = train_labels.gather(0, batch.batch)
+            target = self.train_labels.gather(0, batch.batch)
 
             pred = torch.max(output, 1)[1]
             all_loss += self.loss_fn(output, target).cpu().data.numpy()
@@ -142,16 +143,15 @@ class GCNTrainer(object):
 if __name__ == '__main__':
     args = make_args()
 
-    log_dir = '/home/project/gcn/APBGCN/log'
-    train_dataset = SkeletonDataset(root="/home/project/gcn/APBGCN", name='cv_train', use_motion_vector=False, benchmark='cv', sample = 'train')
-    valid_dataset = SkeletonDataset(root="/home/project/gcn/APBGCN", name='cv_val', use_motion_vector=False, benchmark='cv', sample = 'val')
+    log_dir = '/home/mdl/tqs5537/APBGCN/log'
+    train_dataset = SkeletonDataset(root="/home/mdl/tqs5537/APBGCN/testData", name='cv_train_ntu', use_motion_vector=True, benchmark='cv', sample = 'train')
+    valid_dataset = SkeletonDataset(root="/home/mdl/tqs5537/APBGCN/testData", name='cv_val_ntu', use_motion_vector=True, benchmark='cv', sample = 'val')
     
     train_loader = DataLoader(train_dataset.data, batch_size = args.batch_size)
     valid_loader = DataLoader(valid_dataset.data, batch_size = args.batch_size)
-
-    model = DualGraphTransformer(in_channels = 3, hidden_channels = 16, out_channels = 16, num_layers = 4, num_heads = 8)
+    
+    model = DualGraphTransformer(in_channels = 10, hidden_channels = 16, out_channels = 16, num_layers = 4, num_heads = 8)
     #optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.98))
-
     noam_opt = get_std_opt(model, args)
 
 

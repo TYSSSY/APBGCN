@@ -1,4 +1,5 @@
 from abc import ABC
+from models.synergy import get_synergy
 
 import torch
 import torch.nn as nn
@@ -18,13 +19,14 @@ class DualGraphTransformer(nn.Module, ABC):
                  num_joints=25,
                  classes=60,
                  drop_rate=0.5,
-                 sequential=True,
+                 sequential=False,
                  trainable_factor=True):
         super(DualGraphTransformer, self).__init__()
         self.spatial_factor = nn.Parameter(torch.ones(1)) * 0.5
         self.sequential = sequential
         self.num_layers = num_layers
         self.trainable_factor = trainable_factor
+        self.synergy_in_channels = 36
         channels = [in_channels] + [hidden_channels] * (num_layers - 1) + [out_channels]
         self.spatial_layers = nn.ModuleList([
             HGAConv(in_channels=channels[i],
@@ -41,7 +43,7 @@ class DualGraphTransformer(nn.Module, ABC):
                           causal=True) for i in range(num_layers)
         ])
         if not self.sequential:
-            self.temporal_in = nn.Linear(in_features=in_channels, out_features=hidden_channels)
+            self.temporal_in = nn.Linear(in_features=self.synergy_in_channels, out_features=hidden_channels)
         self.bottle_neck = nn.Linear(in_features=out_channels, out_features=out_channels)
         self.final_layer = nn.Linear(in_features=out_channels * num_joints, out_features=classes)
 
@@ -55,17 +57,24 @@ class DualGraphTransformer(nn.Module, ABC):
                               'n b c -> b n c')
         else:  # parallel architecture
             s = t
+            t = get_synergy(t)
+            #t = self.temporal_in(t.permute(1,0))
+            t = torch.unsqueeze(t.permute(1, 0), 1)
             t = self.temporal_in(rearrange(t, 'b n c -> n b c'))
-
+            #print(t.shape)
+            #print(p)
             for i in range(self.num_layers):
                 s = fn.relu(self.spatial_layers[i](s, adj))
                 t = fn.relu(fn.layer_norm(self.temporal_layers[i](t),
                                           t.shape[1:]) + t)
             if self.trainable_factor:
-                factor = fn.sigmoid(self.spatial_factor)
+                factor = fn.sigmoid(self.spatial_factor).to("cuda")
+                #t = factor * rearrange(s, 'b n c -> b (n c)') + (1. - factor) * t
                 t = factor * s + (1. - factor) * rearrange(t, 'n b c -> b n c')
+                
             else:
                 t = (s + rearrange(t, 'n b c -> b n c')) * 0.5
+        #t = self.bottle_neck(t)
         t = rearrange(self.bottle_neck(t), 'b n c -> b (n c)')
         t = self.final_layer(t)
         # return fn.sigmoid(t)  # dimension (b, n, oc)
